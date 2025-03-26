@@ -11,7 +11,12 @@ def main():
 
     foo () = do re mi ; bar  = fa sol la
 
+    riba(arg1) = re arg1 
+    
+    
     # Track with notes and macro calls
+    piano: riba(do) mi
+    
     """
 
     tokenizer = Tokenizer(source)
