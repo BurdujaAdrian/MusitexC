@@ -8,7 +8,7 @@ def main(source_code=None):
     if not source_code:
         source_code = """
         title:"My Music Composition"
-        tempo:90
+        tempo:120
 
         # Define variables
         melancholy = mi
