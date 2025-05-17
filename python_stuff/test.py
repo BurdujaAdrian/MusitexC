@@ -7,22 +7,21 @@ import sys
 def main(source_code=None):
     if not source_code:
         source_code = """
-        title:"My Music Composition"
-        tempo:120
+        title:"Test Song with Durations"
+        tempo:110
 
         # Define variables
-        melancholy = mi
-        resolve = sol
+        melancholy = mi*2 re/2
+        resolve = sol*1.5
 
         # Define macros
-        bitter_chorus() = la si la sol fa mi re
-        soft_verse(melancholy, resolve) = melancholy re fa sol resolve
+        bitter_chorus()  re5*2 mi5 re5/2 re5/2 mi5 re5*2
+        soft_verse(melancholy, resolve) = melancholy re fa*2 sol resolve
 
         # Track with notes and macro calls
-        piano: do mi bitter_chorus. melancholy si soft_verse(mi,sol).
-        violin: sol5 fa5 mi5 re5 do5
+        piano: bitter_chorus. fa*2 sol la*2 bitter_chorus.
+        piano2: re*2 re do*2 do mi mi*2 fa/2 fa/2 do*4
 
-        ---
         """
 
 
@@ -71,6 +70,7 @@ def main(source_code=None):
 
     return output
 
+# It tests the interpreter and lexer
 if __name__ == "__main__":
     # If a file was specified, read from it
     if len(sys.argv) > 1:

@@ -36,7 +36,6 @@ class Parser:
 
     def parse(self):
         # Create program node (root of AST)
-        #update metadata if you want to add for example
         metadata = Metadata()
         macros = []
         variables = []
@@ -122,9 +121,10 @@ class Parser:
         parameters = []
 
         # Parse parameters
-        if (self.match(TokenType.OPEN_PAREN)):
+        if self.current_token.type == TokenType.OPEN_PAREN:
+            self.advance()  # Consume '('
 
-        # If there are parameters (not empty parentheses)
+            # If there are parameters (not empty parentheses)
             if self.current_token.type != TokenType.CLOSE_PAREN:
                 # Parse first parameter
                 if self.current_token.type == TokenType.ALPHANUM:
@@ -145,7 +145,7 @@ class Parser:
             self.match(TokenType.EQUAL)
             body = self.parse_macro_body()
         else:
-        # Parse equals sign and body
+            # Parse equals sign and body
             self.match(TokenType.EQUAL)
             body = self.parse_macro_body()
 
@@ -160,15 +160,34 @@ class Parser:
         body = []
 
         # Parse notes, variables, etc. until end of line
-        while self.current_token.type not in [TokenType.NL, TokenType.SEMICOLON,  TokenType.EOF]:
+        while self.current_token.type not in [TokenType.NL, TokenType.SEMICOLON, TokenType.EOF]:
             if self.current_token.type == TokenType.ALPHANUM:
                 element_value = self.current_token.value
-                self.advance()
+                
+                # Check for duration modifiers
+                if self.peek().type == TokenType.ASTERISK or self.peek().type == TokenType.SLASH:
+                    # Get the base note
+                    note_name = element_value
+                    self.advance()  # Move to the * or / token
+                    
+                    # Get the duration operator (* or /)
+                    duration_op = self.current_token.value
+                    self.advance()  # Move to the number
+                    
+                    # Get the duration value
+                    if self.current_token.type == TokenType.NUM:
+                        duration_value = self.current_token.value
+                        self.advance()
+                        
+                        # Combine into a single note with duration
+                        if duration_op == '*':
+                            element_value = f"{note_name}*{duration_value}"
+                        else:  # duration_op == '/'
+                            element_value = f"{note_name}/{duration_value}"
+                else:
+                    self.advance()
 
                 # Check if it's a macro call
-                # if self.current_token.type == TokenType.SEMICOLON:
-                #     self.advance()
-                #     return body
                 if self.current_token.type == TokenType.OPEN_PAREN:
                     # Parse macro call
                     body.append(self.parse_macro_call_with_name(element_value))
@@ -184,11 +203,27 @@ class Parser:
         var_name = self.match(TokenType.ALPHANUM).value
         self.match(TokenType.EQUAL)
 
-        # Parse the value (currently only supporting several  notes)
+        # Parse the value (currently only supporting notes with durations)
         if self.current_token.type == TokenType.ALPHANUM:
-            value = Note(self.current_token.value)
+            note_name = self.current_token.value
             self.advance()
-
+            
+            # Check for duration modifiers
+            if self.current_token.type == TokenType.ASTERISK or self.current_token.type == TokenType.SLASH:
+                duration_op = self.current_token.value
+                self.advance()
+                
+                if self.current_token.type == TokenType.NUM:
+                    duration_value = self.current_token.value
+                    self.advance()
+                    
+                    # Combine into a single note with duration
+                    if duration_op == '*':
+                        note_name = f"{note_name}*{duration_value}"
+                    else:  # duration_op == '/'
+                        note_name = f"{note_name}/{duration_value}"
+            
+            value = Note(note_name)
         else:
             raise SyntaxError(
                 f"Expected note value, got {self.current_token.type} at line {self.current_token.line}, column {self.current_token.column}")
@@ -212,6 +247,23 @@ class Parser:
             elif self.current_token.type == TokenType.ALPHANUM:
                 element_value = self.current_token.value
                 self.advance()
+                
+                # Check for duration modifiers
+                if self.current_token.type == TokenType.ASTERISK or self.current_token.type == TokenType.SLASH:
+                    # Get the duration operator (* or /)
+                    duration_op = self.current_token.value
+                    self.advance()  # Move to the number
+                    
+                    # Get the duration value
+                    if self.current_token.type == TokenType.NUM:
+                        duration_value = self.current_token.value
+                        self.advance()
+                        
+                        # Combine into a single note with duration
+                        if duration_op == '*':
+                            element_value = f"{element_value}*{duration_value}"
+                        else:  # duration_op == '/'
+                            element_value = f"{element_value}/{duration_value}"
 
                 # Check if it's a macro call
                 if self.current_token.type == TokenType.OPEN_PAREN:

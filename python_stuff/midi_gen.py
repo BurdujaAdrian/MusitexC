@@ -46,6 +46,7 @@ class MIDIGenerator:
                 if isinstance(note, MusicNote):
                     midi_note = self.note_to_midi_number(note)
                     # Arguments: track, channel, note, time, duration, volume
+                    print(f"Adding note {note} with duration {note.duration} at time {time}")
                     self.midi.addNote(i, 0, midi_note, time, note.duration, 100)
                     time += note.duration
         
@@ -94,9 +95,20 @@ def generate_midi_from_interpreter_output(interpreter_output, filename="music_ou
                 octave = 4  # Default octave
                 if idx < len(note_str) and note_str[idx].isdigit():
                     octave = int(note_str[idx])
+                    
+                duration = 1.0  # Default duration
+                
+                # Look for duration information in the note_str
+                # This is assuming the interpreter outputs notes in a format like "C4*2.0" 
+                remaining = note_str[idx:].strip()
+                if ':' in remaining:
+                    try:
+                        duration = float(remaining.split(':')[1])
+                    except (ValueError, IndexError):
+                        pass
                 
                 # Create MusicNote object
-                note = MusicNote(letter, octave, 1.0, accidental)
+                note = MusicNote(letter, octave, duration, accidental)
                 tracks[current_track].append(note)
     
     # Generate MIDI

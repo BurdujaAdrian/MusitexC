@@ -101,10 +101,10 @@ class Interpreter:
                 if isinstance(result, list):
                     track_notes.extend(result)
                     for note in result:
-                        self.output.append(f"  {note}")
+                        self.output.append(f"  {note}:{note.duration}")
                 else:
                     track_notes.append(result)
-                    self.output.append(f"  {result}")
+                    self.output.append(f"  {result}:{result.duration}")
         
         self.tracks[track.name] = track_notes
     
@@ -124,10 +124,28 @@ class Interpreter:
         # Check if this is a variable reference
         if note.value in self.variables:
             return self.variables[note.value]
-        
+
         # Otherwise create a new note
         note_name = note.value.lower()
-        
+
+        # Extract duration if specified
+        duration = 1.0  # Default duration
+        if '*' in note_name:
+            parts = note_name.split('*')
+            note_name = parts[0]
+            print("Important debug: "+ parts[1])
+            try:
+                duration = float(parts[1])
+            except ValueError:
+                print(f"Warning: Invalid duration multiplier: {parts[1]}")
+        elif '/' in note_name:
+            parts = note_name.split('/')
+            note_name = parts[0]
+            try:
+                duration = 1.0 / float(parts[1])
+            except (ValueError, ZeroDivisionError):
+                print(f"Warning: Invalid duration divisor: {parts[1]}")
+
         # Check for accidentals 
         accidental = None
         if '#' in note_name:
@@ -142,8 +160,8 @@ class Interpreter:
         if len(note_name) > 1 and note_name[-1].isdigit():
             octave = int(note_name[-1])
             note_name = note_name[:-1]
-        
-        return MusicNote(note_name, octave, accidental=accidental)
+        print(note_name + " " + str(octave) + " " + str(duration) + " " + str(accidental))
+        return MusicNote(note_name, octave, duration, accidental=accidental)
     
     def _expand_macro(self, macro_call):
         """Expand a macro call into its constituent notes"""
