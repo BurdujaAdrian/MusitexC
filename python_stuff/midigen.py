@@ -1,5 +1,5 @@
 from new_parser import *
-from ast import *
+from ast_ import *
 from midiutil import MIDIFile
 
 class gen_state:

@@ -111,7 +111,12 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
     const handleExportMIDI = () => {
         // Placeholder for MIDI export functionality
         console.log('Exporting as MIDI...');
-        alert('MIDI export functionality will be implemented here');
+        const link = document.createElement('a');
+        link.href = '/tex.mid'; // File must be in the `public` folder
+        link.download = 'tex.mid';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     // Load project on mount if projectId is provided
@@ -147,25 +152,21 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
     // This would be replaced with actual API call to your Python backend
     const processCode = async (codeToProcess: string) => {
         setIsLoading(true);
-
-        // Simulating API call to Python backend
+        console.log('Processing code:', codeToProcess);
         try {
-            // Mock backend response - in reality, this would come from your Python service
-            await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
-
-            const mockResponse: ParseResult = {
-                hasError: codeToProcess.includes('error'),
-                errorLine: codeToProcess.includes('error')
-                    ? codeToProcess.split('\n').findIndex(line => line.includes('error'))
-                    : -1,
-                errorMessage: codeToProcess.includes('error') ? 'Syntax error in note sequence' : '',
-                // In reality, this could be a base64 image string of rendered sheet music from your Python backend
-                sheetMusicImage: !codeToProcess.includes('error')
-                    ? 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Music-staff.svg/640px-Music-staff.svg.png'
-                    : null
-            };
-
-            setParseResult(mockResponse);
+            const response = await fetch('http://localhost:5000/api/compile', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'text/plain',
+                },
+                body: codeToProcess,
+            });
+    
+            if (!response.ok) throw new Error('Network response was not ok');
+    
+            const result = await response.json(); // Expecting JSON response from backend
+    
+            setParseResult(result); // Assumes backend sends result in expected ParseResult shape
         } catch (error) {
             setParseResult({
                 hasError: true,
@@ -177,12 +178,11 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
             setIsLoading(false);
         }
     };
-
     useEffect(() => {
         // Parse code whenever it changes (with debounce)
         const timer = setTimeout(() => {
             processCode(code);
-        }, 500);
+        }, 10000);
 
         return () => clearTimeout(timer);
     }, [code]);

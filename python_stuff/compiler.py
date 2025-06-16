@@ -1,22 +1,32 @@
 from new_parser import Parser
 from lexer import Tokenizer
 from simplify import * 
-from ast import traverse_ast
+from ast_ import traverse_ast
 from midigen import *
 import sys
+import os
 
-def main():
-    file_name = sys.argv[1]
+def main(input = None):
+    # Define the path to the public directory
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.'))
+    public_dir = os.path.join(base_dir, 'public')
+    os.makedirs(public_dir, exist_ok=True)
+    print(public_dir)
 
-    with open(file_name) as f:
-        source = f.read()
+
+    if input is not None and len(sys.argv) < 2:
+        file_name = "tex.mtex"
+        source = input
+        print("No input file provided")
+    else:
+        file_name = sys.argv[1]
+        with open(file_name) as f:
+            source = f.read()
 
     tokenizer = Tokenizer(source)
     tokens = tokenizer.tokenize()
-
     parser = Parser(tokens)
     ast = parser.parse()
-
 
 
     # sanity check
@@ -43,14 +53,14 @@ def main():
     print(traverse_ast(ast,0))
     resolve_macros(ast)
     print(traverse_ast(ast,0))
-    
     output = ""
     try:
         output = sys.argv[2]
     except:
         output = file_name.split(".")[1][1:] + ".mid"
         # files are in the form ./twinkle.midi , after splitting /twinkle, skip / with [1:]
-    gen_midi(ast,output)
+    midi_path = os.path.join(public_dir, output)
+    gen_midi(ast, midi_path)
 
     # error checking
     if len(ast.err_list) > 0:

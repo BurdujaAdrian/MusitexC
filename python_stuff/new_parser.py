@@ -1,5 +1,5 @@
-from ast import *
-
+from ast_ import *
+from lexer import TokenType
 NOTES = [TokenType.do,TokenType.re,TokenType.mi,TokenType.fa,TokenType.sol,TokenType.la,TokenType.si, TokenType.KW_R]
 END_STATEMENT = [TokenType.NL, TokenType.SEMICOLON, TokenType.EOF]
 
