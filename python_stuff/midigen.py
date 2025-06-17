@@ -2,255 +2,197 @@ from new_parser import *
 from ai_ast import *
 from midiutil import MIDIFile
 
-
 class gen_state:
     def __init__(self):
         self.oct = 4
         self.tempo = 60
-        self.meas = (1, 4)
+        self.meas = (4,4)
+        self.counter = 0 
         self.dur = 1
         self.channel = 0
         self.volume = 100
 
         self.semitone_dict = {
             'r': 0,
-            'C': 0, 'do': 0,
-            'D': 0, 're': 0,
-            'E': 0, 'mi': 0,
-            'F': 0, 'fa': 0,
-            'G': 0, 'sol': 0,
-            'A': 0, 'la': 0,
-            'B': 0, 'si': 0
-
+            'c': 0, 'do': 0,
+            'd': 0, 're': 0,
+            'e': 0, 'mi': 0,
+            'f': 0, 'fa': 0,
+            'g': 0, 'sol':0,
+            'a': 0, 'la': 0,
+            'b': 0, 'si': 0
         }
 
         self.time = 0
 
+        pass
 
-def gen_midi(ast, output):
-    # print()
-    # print()
-    # print("generating midi:")
+
+def gen_midi(ast,output):
     if len(ast.tracks) == 1:
-        # print("for only one track")
-        gen_mono_track(ast, output)
-    # else:
-        # gen_multi_track(ast.tracks, ast.metadata)
+        gen_mono_track(ast,output)
+    else:
+        ast.err_list.append("Error : Multiple tracks within the same file are currently not supported.")
+        return
+        # gen_multi_track(ast.tracks,ast.metadata)
     pass
 
 
-def gen_mono_track(ast, output):
+def gen_mono_track(ast,output):
     track = ast.tracks[0]
     meta = ast.metadata
 
-    midi = MIDIFile(1, True, True, False, 1)  # default values for 1 track
-    midi.addTempo(0, 0, 120)  # default values
+    midi = MIDIFile(1,True,True,False,1) # default values for 1 track
+    midi.addTempo(0,0,120) #default values
 
-    midi.addTrackName(0, 0, track.name)  # add the name of the track
+    midi.addTrackName(0,0,track.name) # add the name of the track
 
-    for m_id, movement in enumerate(track.movements):
+    for m_id,movement in enumerate(track.movements):
 
         if movement.instrument.value in midi_instruments.keys():
             program = midi_instruments[movement.instrument.value]
         else:
-            ast.err_list.append(f"""Compilation error: instrument \"{movement.instrument.value}\" is not supported
-Tip: You can choose instruments like piano,guitar etc.
-Tip: All the midi instruments are supported""")
-        midi.addProgramChange(0, m_id, 0, program)
+            ast.err_list.append(f"""Compilation error({movement.instrument.line},{movement.instrument.column}): instrument \"{movement.instrument.value}\" is not supported
+| Tip: You can choose instruments like piano,guitar etc.
+| Tip: All the midi instruments are supported
+
+""")
+
+        midi.addProgramChange(0,m_id,0,program)
 
         state = gen_state()
 
-        for e_id, event in enumerate(movement.expressions):
+        for e_id,event in enumerate(movement.expressions):
             if isinstance(event, Note):
-                volume = state.volume
+                try:
+                    next_state = movement.expressions[e_id+1]
+                except:
+                    next_state = event
 
-                if event.value.value.lower() == 'r':
-                    # handle rests
-                    # print("	no, it's a rest")
-                    volume = 0
 
-                note = event.value.value.lower()
-                note_n = note_to_midi[note]
-                # print(f"	note id: {note_n}")
-
-                semitone = state.semitone_dict[note] if event.semitone == 999 else event.semitone
-                octave = state.oct if event.octave == -1 else event.octave
-                pitch = note_n + semitone + 12 * octave
-                # print(f"	resulting pitch: {pitch}")
-
-                duration = state.dur if event.duration == -1 else event.duration
-                if isinstance(duration, Fraction):
-                    duration = duration.x / duration.over
-                duration *= 4
-
-                if pitch < 0 or pitch > 127:
-                    print(
-                        f"WARNING: MIDI pitch {pitch} out of range for note {note}, octave {octave}, semitone {semitone}. Clamping to valid range.")
-                pitch = max(0, min(127, pitch))
-                midi.addNote(0, m_id, pitch, state.time, duration, volume)
-
-                state.time += duration
+                add_note(state,next_state,event,m_id,midi)
 
                 pass
 
-            elif isinstance(event, SetMeasure):
+
+            elif isinstance(event,SetInterval):
+                #this is already handled
                 pass
-                # print(f"	found measure{event}")
-                # print()
 
-            elif isinstance(event, ReleaseNote):
+            elif isinstance(event,SetMeasure):
+                state.meas = (int(event.x),int(event.over))
                 pass
-            elif isinstance(event, SetTone):
-                note_name = event.note.value.lower()
-                state.semitone_dict[note_name] = event.n
 
-
-            elif isinstance(event, HoldNote):
-                # If the event.note is a Chord, handle each note in the chord
-                if isinstance(event.note, Chord):
-                    for note_e in event.note.notes:
-                        volume = state.volume
-
-                        if note_e.value.value.lower() == 'r':
-                            volume = 0
-                            note_e.value.value = "do"  # or leave as is
-
-                        note = note_e.value.value.lower()
-                        note_n = note_to_midi[note]
-                        semitone = state.semitone_dict[note] if note_e.semitone == 999 else note_e.semitone
-                        octave = state.oct if note_e.octave == -1 else note_e.octave
-                        pitch = note_n + semitone + 12 * octave
-                        if pitch < 0 or pitch > 127:
-                            print(
-                                f"WARNING: MIDI pitch {pitch} out of range for note {note}, octave {octave}, semitone {semitone}. Clamping to valid range.")
-                        pitch = max(0, min(127, pitch))
-
-                        duration = state.dur if note_e.duration == -1 else note_e.duration
-                        if isinstance(duration, Fraction):
-                            duration = duration.x / duration.over
-
-                        duration = duration * 4
-                        midi.addNote(0, m_id, pitch, state.time, duration, volume)
-                    state.time += duration
-                # If the event.note is a single Note, handle as single note
-                elif isinstance(event.note, Note):
-                    note_e = event.note
-                    volume = state.volume
-
-                    if note_e.value.value.lower() == 'r':
-                        volume = 0
-                        note_e.value.value = "do"
-
-                    note = note_e.value.value.lower()
-                    note_n = note_to_midi[note]
-                    semitone = state.semitone_dict[note] if note_e.semitone == 999 else note_e.semitone
-                    octave = state.oct if note_e.octave == -1 else note_e.octave
-                    pitch = note_n + semitone + 12 * octave
-                    if pitch < 0 or pitch > 127:
-                        print(
-                            f"WARNING: MIDI pitch {pitch} out of range for note {note}, octave {octave}, semitone {semitone}. Clamping to valid range.")
-                    pitch = max(0, min(127, pitch))
-
-
-                    duration = state.dur if note_e.duration == -1 else note_e.duration
-                    if isinstance(duration, Fraction):
-                        duration = duration.x / duration.over
-
-                    duration = duration * 4
-                    midi.addNote(0, m_id, pitch, state.time, duration, volume)
-                    state.time += duration
-                # Optionally: handle Ident or MacroCall if those appear
-                else:
-                    ast.err_list.append("HoldNote of unsupported type: " + str(type(event.note)))
-
-
-            elif isinstance(event, SetVolume):
+            elif isinstance(event,SetTone):
+                state.semitone_dict[event.note.value.lower()] += int(event.n)
+            elif isinstance(event,SetVolume):
                 state.volume = event.vol
-            elif isinstance(event, SetTempo):
+            elif isinstance(event,SetTempo):
                 state.tempo = event.n
-
-            elif isinstance(event, SetOctave):
+            elif isinstance(event,SetOctave):
                 state.oct += event.n * event.dir
-
-            elif isinstance(event, SetDuration):
-                duration = event.dur
-                if isinstance(duration, Fraction):
+            elif isinstance(event,SetDuration):
+                duration = event.dur 
+                if isinstance(duration,Fraction):
                     duration = duration.x / duration.over
 
                 state.dur = duration
 
-            elif isinstance(event, Bar):
+            elif isinstance(event,Bar):
+
+                if state.counter != state.meas[0]:
+                    ast.err_list.append(f"Measure error({event.source.line},{event.source.column}): The measure is {state.meas[0]}/{state.meas[1]}, for this bar got {state.counter} notes instead")
+
+                # print("Current measure:",state.counter)
+                state.counter = 0
+
                 pass
-                # print(f"	found bar")
-                # print()
 
-            elif isinstance(event, Chord):
-                duration = 0
-                for note_e in event.notes:
-                    # handle note event
-                    # print(f"ound note {note_e}")
-
-                    volume = state.volume
-
-                    if note_e.value.value.lower() == 'r':
-                        # handle rests
-                        # print("	no, it's a rest")
-                        volume = 0
-                        note_e.value.value = "do"
-
-                    note = note_e.value.value.lower()
-                    note_n = note_to_midi[note]
-                    # print(f"	note id: {note_n}")
-
-                    semitone = state.semitone_dict[note] if note_e.semitone == 999 else note_e.semitone
-                    octave = state.oct if note_e.octave == -1 else note_e.octave
-                    pitch = note_n + semitone + 12 * octave
-                    # print(f"	resulting pitch: {pitch}")
-
-                    if pitch < 0 or pitch > 127:
-                        print(
-                            f"WARNING: MIDI pitch {pitch} out of range for note {note}, octave {octave}, semitone {semitone}. Clamping to valid range.")
-                    pitch = max(0, min(127, pitch))
-                    duration = state.dur if note_e.duration == -1 else note_e.duration
-                    if isinstance(duration, Fraction):
-                        duration = duration.x / duration.over
-
-                    duration = duration * 4
-
-                    midi.addNote(0, m_id, pitch, state.time, duration, volume)
-
-                state.time += duration
+            elif isinstance(event,Chord):
+                try:
+                    next_state = movement.expressions[e_id+1]
+                except:
+                    next_state = event
 
 
-            elif isinstance(event, SetInterval):
-                # Interpret the interval as a number (e.g., beats or quarter notes)
-                interval = int(event.time.value) if hasattr(event.time, "value") else int(event.time)
-                # Advance state.time by interval (assuming units are quarter notes, adjust as needed)
-                state.time += interval
+                for note_e in event.notes[:-1]:
+                    # treat the next state as being interval 0
+                    # this way note/note/... is completly equivalent to note 0 note 0 ...
+                    interv_0 = SetInterval(Token("0",0,0,TokenType.NUM))
+                    add_note(state,interv_0,note_e,m_id,midi)
+                    continue
 
+                add_note(state,next_state,event.notes[-1],m_id,midi)
+                pass
+
+            elif isinstance(event, errExpr):
+                pass
             else:
                 raise ValueError(f"	Unhandled event type in movement:{event}")
 
-    with open(output, "wb") as output_file:
-        midi.writeFile(output_file)
+
+    if len(ast.err_list) == 0:
+        with open(output, "wb") as output_file:
+            midi.writeFile(output_file)    
 
     pass
 
+def add_note(state,next_state,event,m_id,midi):
+
+    note = event.value.value.lower()
+
+    if isinstance(next_state,ReleaseNote):
+        release_note(state,note,midi,m_id)
+        return
+
+    volume = state.volume
+
+    if event.value.value.lower() == 'r':
+        #handle rests
+        volume = 0
+
+    note_n = note_to_midi[note]
+
+    semitone = state.semitone_dict[note] if event.semitone == 0 else event.semitone
+
+    octave = state.oct if event.octave == -1 else event.octave
+
+    pitch = note_n + semitone + 12*octave
+    # print("pitch:",pitch)
+
+    duration = state.dur if event.duration == -1 else event.duration
+    if isinstance(duration,Fraction):
+        duration = duration.x / duration.over
+    elif not (isinstance(duration,int) or isinstance(duration,float)):
+        raise ValueError(f"duration should be numeric, {duration} is {type(duration)} instead")
+
+    duration *= 4
+
+    midi.addNote(0,m_id,pitch,state.time,duration, volume)
+    
+    delta =  duration \
+        if not isinstance(next_state,SetInterval) \
+        else int(next_state.time.value)
+
+    state.counter += delta
+    state.time += delta
+
+    pass
 
 note_to_midi = {
-    'r': 0,  # rest is just a silent note
-    'C': 0, 'do': 0,
-    'D': 2, 're': 2,
-    'E': 4, 'mi': 4,
-    'F': 5, 'fa': 5,
-    'G': 7, 'sol': 7,
-    'A': 9, 'la': 9,
-    'B': 11, 'si': 11
+    'r':0, #rest is just a silent note
+    'c': 0, 'do': 0,
+    'd': 2, 're': 2,
+    'e': 4, 'mi': 4,
+    'f': 5, 'fa': 5,
+    'g': 7, 'sol': 7,
+    'a': 9, 'la': 9,
+    'b': 11, 'si': 11
 }
 
 midi_instruments = {
     # Piano (0-7)
-    'piano': 0,  # default piano
+    'piano' : 0, #default piano
     'acoustic_grand_piano': 0,
     'bright_acoustic_piano': 1,
     'electric_grand_piano': 2,
@@ -271,7 +213,7 @@ midi_instruments = {
     'dulcimer': 15,
 
     # Organ (16-23)
-    'organ': 16,
+    'organ' :16,
     'drawbar_organ': 16,
     'percussive_organ': 17,
     'rock_organ': 18,
@@ -282,7 +224,7 @@ midi_instruments = {
     'tango_accordion': 23,
 
     # Guitar (24-31)
-    'guitar': 24,
+    'guitar':24,
     'acoustic_guitar_nylon': 24,
     'acoustic_guitar_steel': 25,
     'electric_guitar_jazz': 26,
@@ -293,7 +235,7 @@ midi_instruments = {
     'guitar_harmonics': 31,
 
     # Bass (32-39)
-    'bass': 32,
+    'bass':32,
     'acoustic_bass': 32,
     'electric_bass_finger': 33,
     'electric_bass_pick': 34,

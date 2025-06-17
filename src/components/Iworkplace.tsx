@@ -197,14 +197,12 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
         setIsSaved(!contentChanged);
     }, [code, projectTitle, originalCode, originalTitle]);
 
-    // This would be replaced with actual API call to your Python backend
     const processCode = async (codeToProcess: string) => {
         setIsLoading(true);
 
         try {
             await new Promise(resolve => setTimeout(resolve, 300));
-            await new Promise(resolve => setTimeout(resolve, 400));
-            await new Promise(resolve => setTimeout(resolve, 500));
+
             const mockResponse: ParseResult = {
                 hasError: codeToProcess.includes('error'),
                 errorLine: codeToProcess.includes('error')
@@ -253,12 +251,27 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
 
     // Run the code manually
     const handleRun = async () => {
+
+        try {
+            const response = await fetch("http://localhost:8000/api/run", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ content: code })
+            });
+            const result = await response.json();
+            //alert(`Sent to FastAPI! Status: ${result.status}, Length: ${result.length}`);
+        } catch (err) {
+            alert("Failed to send to the Compiler service");
+        }
         try {
             const response = await fetch("http://localhost:8000/api/compile", {
                 method: "POST",
             });
-            const contentType = response.headers.get("content-type");
 
+            const contentType = response.headers.get("content-type");
+            console.log("Response headers:", response);
             if (
                 response.ok &&
                 contentType &&
@@ -298,23 +311,20 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
 
             } else {
                 const data = await response.json();
-                alert("Compile error: " + (data.error || "Unknown error"));
+                setParseResult({
+                    hasError: true,
+                    errorLine: -1,
+                    errorMessage: "Compile error: " + (data.error || "Unknown error"),
+                    sheetMusicImage: null
+                });
             }
         } catch (err: any) {
-            alert("Failed to compile: " + err);
-        }
-        try {
-            const response = await fetch("http://localhost:8000/api/run", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ content: code })
-            });
-            const result = await response.json();
-            alert(`Sent to FastAPI! Status: ${result.status}, Length: ${result.length}`);
-        } catch (err) {
-            alert("Failed to send to FastAPI");
+            setParseResult({
+                hasError: true,
+                errorLine: -1,
+                errorMessage: "Failed to compile",
+                sheetMusicImage: null
+            })
         }
     };
 
@@ -458,7 +468,7 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
         mainContent: 'flex flex-1 overflow-hidden relative',
         editorPanel: `flex flex-col ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} border-r ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`,
         editorHeader: 'p-2 border-b text-sm font-medium flex justify-between items-center',
-        lineNumbers: `py-2 text-xs ${theme === 'dark' ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-600'}`,
+        lineNumbers: `py-2 text-xs overflow-hidden ${theme === 'dark' ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-600'}`,
         codeEditor: `flex-1 p-2 text-sm font-mono outline-none resize-none ${theme === 'dark' ? 'bg-gray-900 text-gray-300' : 'bg-white'}`,
         problemsPanel: `p-2 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'} text-sm max-h-28 overflow-auto border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`,
         previewPanel: `overflow-auto ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`,

@@ -1,31 +1,25 @@
-title: "Twinkle Twinkle Little Star"
 
-verse1(arg1) = [
-        do do sol sol | la la sol r |
-        fa fa mi mi | re re do r |
-]
+gamma = !3/4  -la -si -re -mi
 
-track "main":
-    piano "melody": [
-        !4/4
-        > 
-	:1/4  # Quarter note duration
+piano "melody" : gamma :1/4 [
+	[ fa:3/8 do.5:3/8 | do.5 la sol | ]*2
+						
+						
+						
+	  fa:3/8 do.5:3/8 | do.5 la/fa sol |
+	  					
+     :3/4 do/sol | sol.3 0 si+ 0 re+ 0 fa |
+     						
+    #:1/4 do:3/16 re:1/16 do:3/16 re:1/16 do |
+] 
 
-        # Verse 1 
-        verse1(bruh)
-
-        # Verse 2 
-        [ sol sol fa fa | mi mi re r |]*2
-        
-        # Verse 3 
-    	verse1
-    ]
-
-    violin "harmony": [
-    	v=50
-
-        !4/4
-        <1 :1  # Whole note duration (lower octave)
-        
-        [ do/mi/sol | sol/si/re | fa/la/do | mi/sol/si | ]*2
+piano "base": gamma < :3/4 v=60 [
+	[ do/fa/la  0 do.4 | ]*2
+					
+	[ si/mi/sol 0 si.4 | ]*2
+					
+	[ la/re/fa  0 la.4 | ]*2
+					
+	  sol.3 0 re+ 0  sol |
+     r| # sol.3 0 si+ 0 re+ 0 fa |
 ]

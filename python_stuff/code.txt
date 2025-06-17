@@ -1,0 +1,10 @@
+
+
+track "errors":
+guitar : do re mi
+ fa sol la
+
+concert : [
+	volume = 50
+	fa mi re do
+]

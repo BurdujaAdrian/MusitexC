@@ -710,6 +710,7 @@ function segmentToString(ns, ins, instrumentId, tempo) {
       }
     }
   });
+  abcString = abcString.replace(/\|(\s*)$/, '||$1');
   return abcString;
 }
 

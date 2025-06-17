@@ -33,7 +33,7 @@ async def compile_code():
         if result.returncode != 0:
             return JSONResponse(
                 status_code=400,
-                content={"error": result.stderr, "output.txt": result.stdout}
+                content={"error": result.stdout, "output.txt": result.stdout}
             )
         if os.path.exists(midi_file):
             return FileResponse(midi_file, media_type="audio/midi", filename=midi_file)
