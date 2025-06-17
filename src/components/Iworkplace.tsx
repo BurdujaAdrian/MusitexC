@@ -6,6 +6,8 @@ import ExportDropdown from './ExportDropdown';
 import ABCJSRenderer from "./ABC";
 import midi2abc from "./midi2abc";
 import ABCJSPlayer from "./ABCJSPlayer";
+import jsPDF from 'jspdf';
+import { svg2pdf } from 'svg2pdf.js';
 // TypeScript interfaces
 interface ParseResult {
     hasError: boolean;
@@ -105,11 +107,68 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
 
     // Export handlers
     const handleExportPDF = () => {
-        alert('PDF export functionality will be implemented here');
-    };
+        const svgElement = document.querySelector('.mb-8 svg');
+        if (!svgElement) {
+            alert("No SVG found to export.");
+            return;
+        }
 
-    const handleExportMIDI = () => {
-        alert('MIDI export functionality will be implemented here');
+        const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        const svgData = new XMLSerializer().serializeToString(svgClone);
+        const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+
+        const image = new Image();
+        image.onload = () => {
+            canvas.width = image.width;
+            canvas.height = image.height;
+            context?.drawImage(image, 0, 0);
+
+            const imgData = canvas.toDataURL("image/png");
+
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'px',
+                format: [canvas.width, canvas.height],
+            });
+
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save('music-sheet.pdf');
+
+            URL.revokeObjectURL(url);
+        };
+
+        image.src = url;
+    };
+    const handleExportMIDI = async () => {
+        try {
+            const response = await fetch("http://localhost:8000/api/compile", {
+                method: "POST",
+            });
+            const contentType = response.headers.get("content-type");
+
+            if (
+                response.ok &&
+                contentType &&
+                contentType.includes("audio/midi")
+            ) {
+            const blob = await response.blob();
+            // Download MIDI
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "output.midi";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        }
+        }catch (error) {
+            console.error('Error exporting MIDI:', error);
+        }
     };
 
     // Load project on mount if projectId is provided
@@ -144,6 +203,8 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
 
         try {
             await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, 400));
+            await new Promise(resolve => setTimeout(resolve, 500));
             const mockResponse: ParseResult = {
                 hasError: codeToProcess.includes('error'),
                 errorLine: codeToProcess.includes('error')
@@ -192,6 +253,56 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
 
     // Run the code manually
     const handleRun = async () => {
+        try {
+            const response = await fetch("http://localhost:8000/api/compile", {
+                method: "POST",
+            });
+            const contentType = response.headers.get("content-type");
+
+            if (
+                response.ok &&
+                contentType &&
+                contentType.includes("audio/midi")
+            ) {
+                const blob = await response.blob();
+                // Download MIDI
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "output.midi";
+                document.body.appendChild(a);
+                //a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+
+                // Convert to ABC
+                const arrayBuffer = await blob.arrayBuffer();
+                const { Midi } = await import("@tonejs/midi");
+                const midi = new Midi(arrayBuffer);
+
+                const ns = toneMidiToNoteSequence(midi);
+                const abc = midi2abc(ns);
+
+                setAbcNotation(abc);
+
+                // Download as ABC
+                const abcBlob = new Blob([abc], { type: "text/plain" });
+                const abcUrl = window.URL.createObjectURL(abcBlob);
+                const abcA = document.createElement("a");
+                abcA.href = abcUrl;
+                abcA.download = "output.abc";
+                document.body.appendChild(abcA);
+                //abcA.click();
+                abcA.remove();
+                window.URL.revokeObjectURL(abcUrl);
+
+            } else {
+                const data = await response.json();
+                alert("Compile error: " + (data.error || "Unknown error"));
+            }
+        } catch (err: any) {
+            alert("Failed to compile: " + err);
+        }
         try {
             const response = await fetch("http://localhost:8000/api/run", {
                 method: "POST",
@@ -265,7 +376,7 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                 a.href = url;
                 a.download = "output.midi";
                 document.body.appendChild(a);
-                a.click();
+                //a.click();
                 a.remove();
                 window.URL.revokeObjectURL(url);
 
@@ -286,9 +397,10 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                 abcA.href = abcUrl;
                 abcA.download = "output.abc";
                 document.body.appendChild(abcA);
-                abcA.click();
+                //abcA.click();
                 abcA.remove();
                 window.URL.revokeObjectURL(abcUrl);
+
             } else {
                 const data = await response.json();
                 alert("Compile error: " + (data.error || "Unknown error"));
@@ -389,7 +501,7 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                         onClick={handleRun}
                         className={`px-2 py-1 rounded ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'} text-white`}
                     >
-                        Run
+                        Compile MIDI
                     </button>
                     <button
                         onClick={handleSaveCode}
@@ -402,7 +514,6 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                         <Save size={16} className="mr-1" />
                         <span>{isSaved ? 'Saved' : 'Save'}</span>
                     </button>
-                    <button onClick={handleCompileAndDownload}>Compile & Download MIDI</button>
                     <ExportDropdown
                         onExportPDF={handleExportPDF}
                         onExportMIDI={handleExportMIDI}

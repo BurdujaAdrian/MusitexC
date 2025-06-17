@@ -1,9 +1,31 @@
-title : "demo"
+title: "Twinkle Twinkle Little Star"
 
+verse1(arg1) = [
+        do do sol sol | la la sol r |
+        fa fa mi mi | re re do r |
+]
 
-macro2 (arg1, arg2) = arg1 do re arg2
+track "main":
+    piano "melody": [
+        !4/4
+        > 
+	:1/4  # Quarter note duration
 
-macro = do re mi macro_1
-macro_1 = fa sol la
+        # Verse 1 
+        verse1(bruh)
 
-piano: macro macro_1 
+        # Verse 2 
+        [ sol sol fa fa | mi mi re r |]*2
+        
+        # Verse 3 
+    	verse1
+    ]
+
+    violin "harmony": [
+    	v=50
+
+        !4/4
+        <1 :1  # Whole note duration (lower octave)
+        
+        [ do/mi/sol | sol/si/re | fa/la/do | mi/sol/si | ]*2
+]
