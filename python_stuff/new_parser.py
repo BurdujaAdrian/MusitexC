@@ -1,4 +1,4 @@
-from ast import *
+from ai_ast import *
 
 NOTES = [TokenType.do,TokenType.re,TokenType.mi,TokenType.fa,TokenType.sol,TokenType.la,TokenType.si, TokenType.KW_R]
 END_STATEMENT = [TokenType.NL, TokenType.SEMICOLON, TokenType.EOF]
@@ -169,7 +169,7 @@ class Parser:
                         self.idents[m_ident] = (len(self.tracks), len(self.tracks[-1].movements))
                     else:
                         tag_already_exists = f'''Tag {m_ident} already exits {self.idents[m_ident]}'''
-                        instrument_already_used = f'''Instrument {movement.instrument} was already used in this track:{self.idents[m_idents]} 
+                        instrument_already_used = f'''Instrument {movement.instrument} was already used in this track:{self.idents[m_ident]} 
 | Tip: to have the same instrument playing twice in a movement, use a tag to differentiate it:
 | x piano : do re mi
 |   piano : fa sol la
@@ -511,11 +511,21 @@ class Parser:
         # Parse Repetition
         elif self.match(TokenType.ASTERISK):
             source = self.advance()
-            n = int(self.advance().value)
-            if self.stack[-1] == ParseState.EXPR:
-                expression = Repetition(n,source)
+
+            n = 0
+            if self.match(TokenType.NUM):
+                n = int(self.advance().value)
+
+                if self.stack[-1] == ParseState.EXPR:
+                    expression = Repetition(n,source)
+                else:
+                    self.err_list.append(f"{SyntaxErr(self.peek(0))}Repetition postfix operator can only be used after an expression{self.log_tk()}")
             else:
-                self.err_list.append(f"{SyntaxErr(self.peek(0))}Repetition postfix operator can only be used after an expression{self.log_tk()}")
+                self.err_list.append(f"{SyntaxErr(self.peek(0))}Expected number after repetition '*' {self.log_tk()}")
+                expression = errExpr(self.log(0))
+                self.restore_to(TokenType.SPACE)
+
+
 
         # Parse ReleaseNote
         elif self.match(TokenType.CLOSE_PAREN):
@@ -534,7 +544,7 @@ class Parser:
                 expression =HoldNote(note,source)
             else:
                 self.err_list.append(f"{SyntaxErr(self.peek(0))}Expected note or identifier after open parenthesis{self.log_tk()}")
-                self.retore_to_space()
+                self.restore_to(TokenType.SPACE)
 
         # Parse ExprGroup
         elif self.match(TokenType.OPEN_BRACKET):
@@ -629,7 +639,7 @@ class Parser:
             # parse notes
             note_p = self.advance()
 
-            semitone = 999 # placeholder for default value
+            semitone = 0 # placeholder for default value
             octave = -1 # placeholder for default value
             duration = -1 # placeholder for default value
             # parse semitones 
@@ -647,7 +657,7 @@ class Parser:
             if self.match(TokenType.DOT):
                 self.advance()
                 if self.match(TokenType.NUM):
-                    octave = self.advance()
+                    octave = int(self.advance().value)
 
             if self.match(TokenType.SLASH):
                 # parsing chord
@@ -680,6 +690,12 @@ class Parser:
 
                 if self.match(TokenType.NUM):
                     duration = float(self.advance().value)
+                    if self.match(TokenType.SLASH):
+                        self.advance()
+                        over = self.expect(TokenType.NUM)
+                        if over is not None:
+                            duration = duration / int(over.value)
+
                 elif self.match(TokenType.SLASH):
                     self.advance() #consume slash token
 
@@ -769,4 +785,3 @@ def SyntaxErr(token):
 
 def Ident_err(token):
     return f"Identifier Error({token.line},{token.column}):"
-

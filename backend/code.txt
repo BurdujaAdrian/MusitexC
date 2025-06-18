@@ -1,0 +1,25 @@
+
+gamma = !3/4  -la -si -re -mi
+
+piano "melody" : gamma :1/4 [
+	[ fa:3/8 do.5:3/8 | do.5 la sol | ]*2
+						
+						
+						
+	  fa:3/8 do.5:3/8 | do.5 la/fa sol |
+	  					
+     :3/4 do/sol | sol.3 0 si+ 0 re+ 0 fa |
+     						
+    #:1/4 do:3/16 re:1/16 do:3/16 re:1/16 do |
+] 
+
+piano "base": gamma < :3/4 v=60 [
+	[ do/fa/la  0 do.4 | ]*2
+					
+	[ si/mi/sol 0 si.4 | ]*2
+					
+	[ la/re/fa  0 la.4 | ]*2
+					
+	  sol.3 0 re+ 0  sol |
+     r| # sol.3 0 si+ 0 re+ 0 fa |
+]

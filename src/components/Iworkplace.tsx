@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, GripVertical, ArrowLeft, Save } from 'lucide-react';
-import MusicStaffRenderer from './MusicStaffRenderer';
 import ProjectService from './services/ProjectService';
 import AccountDropdown from './AccountDropdown';
 import ExportDropdown from './ExportDropdown';
-
+import ABCJSRenderer from "./ABC";
+import midi2abc from "./midi2abc";
+import ABCJSPlayer from "./ABCJSPlayer";
+import jsPDF from 'jspdf';
+import { svg2pdf } from 'svg2pdf.js';
 // TypeScript interfaces
 interface ParseResult {
     hasError: boolean;
@@ -90,28 +93,82 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
     const [isSaved, setIsSaved] = useState(true);
     const { editorWidth, containerRef } = useResizer(50);
 
+    // ABC notation state for rendering & playing beautiful sheet
+    const [abcNotation, setAbcNotation] = useState<string>("");
+
     // Account dropdown handlers
     const handleLogout = () => {
-        // Navigate to login page or clear authentication
         window.location.href = '/login';
     };
 
     const handleSettings = () => {
         alert('Account settings would be implemented here');
-        // In a real app, you would navigate to the settings page
     };
 
     // Export handlers
     const handleExportPDF = () => {
-        // Placeholder for PDF export functionality
-        console.log('Exporting as PDF...');
-        alert('PDF export functionality will be implemented here');
-    };
+        const svgElement = document.querySelector('.mb-8 svg');
+        if (!svgElement) {
+            alert("No SVG found to export.");
+            return;
+        }
 
-    const handleExportMIDI = () => {
-        // Placeholder for MIDI export functionality
-        console.log('Exporting as MIDI...');
-        alert('MIDI export functionality will be implemented here');
+        const svgClone = svgElement.cloneNode(true) as SVGSVGElement;
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+
+        const svgData = new XMLSerializer().serializeToString(svgClone);
+        const svgBlob = new Blob([svgData], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+
+        const image = new Image();
+        image.onload = () => {
+            canvas.width = image.width;
+            canvas.height = image.height;
+            context?.drawImage(image, 0, 0);
+
+            const imgData = canvas.toDataURL("image/png");
+
+            const pdf = new jsPDF({
+                orientation: 'landscape',
+                unit: 'px',
+                format: [canvas.width, canvas.height],
+            });
+
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save('music-sheet.pdf');
+
+            URL.revokeObjectURL(url);
+        };
+
+        image.src = url;
+    };
+    const handleExportMIDI = async () => {
+        try {
+            const response = await fetch("http://localhost:8000/api/compile", {
+                method: "POST",
+            });
+            const contentType = response.headers.get("content-type");
+
+            if (
+                response.ok &&
+                contentType &&
+                contentType.includes("audio/midi")
+            ) {
+            const blob = await response.blob();
+            // Download MIDI
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "output.midi";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        }
+        }catch (error) {
+            console.error('Error exporting MIDI:', error);
+        }
     };
 
     // Load project on mount if projectId is provided
@@ -121,16 +178,13 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
             if (project) {
                 setProjectTitle(project.title);
                 setCode(project.content);
-                // Store original values to compare against
                 setOriginalCode(project.content);
                 setOriginalTitle(project.title);
                 setIsSaved(true);
             }
         } else {
-            // Create a new project
             const newProject = ProjectService.createProject('Untitled Project', code);
             setProjectTitle(newProject.title);
-            // Store original values to compare against
             setOriginalCode(code);
             setOriginalTitle(newProject.title);
             setIsSaved(true);
@@ -139,19 +193,15 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
 
     // Track changes and update saved state
     useEffect(() => {
-        // Only mark as unsaved if content has actually changed
         const contentChanged = code !== originalCode || projectTitle !== originalTitle;
         setIsSaved(!contentChanged);
     }, [code, projectTitle, originalCode, originalTitle]);
 
-    // This would be replaced with actual API call to your Python backend
     const processCode = async (codeToProcess: string) => {
         setIsLoading(true);
 
-        // Simulating API call to Python backend
         try {
-            // Mock backend response - in reality, this would come from your Python service
-            await new Promise(resolve => setTimeout(resolve, 300)); // Simulate network delay
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             const mockResponse: ParseResult = {
                 hasError: codeToProcess.includes('error'),
@@ -159,12 +209,10 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                     ? codeToProcess.split('\n').findIndex(line => line.includes('error'))
                     : -1,
                 errorMessage: codeToProcess.includes('error') ? 'Syntax error in note sequence' : '',
-                // In reality, this could be a base64 image string of rendered sheet music from your Python backend
                 sheetMusicImage: !codeToProcess.includes('error')
                     ? 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Music-staff.svg/640px-Music-staff.svg.png'
                     : null
             };
-
             setParseResult(mockResponse);
         } catch (error) {
             setParseResult({
@@ -179,7 +227,6 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
     };
 
     useEffect(() => {
-        // Parse code whenever it changes (with debounce)
         const timer = setTimeout(() => {
             processCode(code);
         }, 500);
@@ -203,8 +250,174 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
     };
 
     // Run the code manually
-    const handleRunCode = () => {
-        processCode(code);
+    const handleRun = async () => {
+
+        try {
+            const response = await fetch("http://localhost:8000/api/run", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ content: code })
+            });
+            const result = await response.json();
+            //alert(`Sent to FastAPI! Status: ${result.status}, Length: ${result.length}`);
+        } catch (err) {
+            alert("Failed to send to the Compiler service");
+        }
+        try {
+            const response = await fetch("http://localhost:8000/api/compile", {
+                method: "POST",
+            });
+
+            const contentType = response.headers.get("content-type");
+            console.log("Response headers:", response);
+            if (
+                response.ok &&
+                contentType &&
+                contentType.includes("audio/midi")
+            ) {
+                const blob = await response.blob();
+                // Download MIDI
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "output.midi";
+                document.body.appendChild(a);
+                //a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+
+                // Convert to ABC
+                const arrayBuffer = await blob.arrayBuffer();
+                const { Midi } = await import("@tonejs/midi");
+                const midi = new Midi(arrayBuffer);
+
+                const ns = toneMidiToNoteSequence(midi);
+                const abc = midi2abc(ns);
+
+                setAbcNotation(abc);
+
+                // Download as ABC
+                const abcBlob = new Blob([abc], { type: "text/plain" });
+                const abcUrl = window.URL.createObjectURL(abcBlob);
+                const abcA = document.createElement("a");
+                abcA.href = abcUrl;
+                abcA.download = "output.abc";
+                document.body.appendChild(abcA);
+                //abcA.click();
+                abcA.remove();
+                window.URL.revokeObjectURL(abcUrl);
+
+            } else {
+                const data = await response.json();
+                setParseResult({
+                    hasError: true,
+                    errorLine: -1,
+                    errorMessage: "Compile error: " + (data.error || "Unknown error"),
+                    sheetMusicImage: null
+                });
+            }
+        } catch (err: any) {
+            setParseResult({
+                hasError: true,
+                errorLine: -1,
+                errorMessage: "Failed to compile",
+                sheetMusicImage: null
+            })
+        }
+    };
+
+    // MIDI to ABC conversion helper
+    const toneMidiToNoteSequence = (midi: any) => {
+        const notes: any[] = [];
+        midi.tracks.forEach((track: any, trackIdx: number) => {
+            track.notes.forEach((note: any) => {
+                notes.push({
+                    instrument: trackIdx,
+                    program: track.instrument.number || 0,
+                    startTime: note.time,
+                    endTime: note.time + note.duration,
+                    pitch: note.midi,
+                    velocity: Math.round(note.velocity * 127),
+                    isDrum: false,
+                });
+            });
+        });
+        const tempos =
+            midi.header.tempos && midi.header.tempos.length > 0
+                ? midi.header.tempos.map((t: any) => ({
+                    time: t.ticks !== undefined ? midi.header.ticksToSeconds(t.ticks) : t.time,
+                    qpm: t.bpm,
+                }))
+                : [{ time: 0, qpm: 120 }];
+        const totalTime = midi.duration;
+        return {
+            notes,
+            tempos,
+            totalTime,
+            timeSignatures: [
+                {
+                    time: 0,
+                    numerator: midi.header.timeSignatures[0]?.numerator || 4,
+                    denominator: midi.header.timeSignatures[0]?.denominator || 4,
+                },
+            ],
+        };
+    };
+
+    // Compile and download MIDI and ABC, render beautiful sheet after
+    const handleCompileAndDownload = async () => {
+        try {
+            const response = await fetch("http://localhost:8000/api/compile", {
+                method: "POST",
+            });
+            const contentType = response.headers.get("content-type");
+
+            if (
+                response.ok &&
+                contentType &&
+                contentType.includes("audio/midi")
+            ) {
+                const blob = await response.blob();
+                // Download MIDI
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "output.midi";
+                document.body.appendChild(a);
+                //a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+
+                // Convert to ABC
+                const arrayBuffer = await blob.arrayBuffer();
+                const { Midi } = await import("@tonejs/midi");
+                const midi = new Midi(arrayBuffer);
+
+                const ns = toneMidiToNoteSequence(midi);
+                const abc = midi2abc(ns);
+
+                setAbcNotation(abc);
+
+                // Download as ABC
+                const abcBlob = new Blob([abc], { type: "text/plain" });
+                const abcUrl = window.URL.createObjectURL(abcBlob);
+                const abcA = document.createElement("a");
+                abcA.href = abcUrl;
+                abcA.download = "output.abc";
+                document.body.appendChild(abcA);
+                //abcA.click();
+                abcA.remove();
+                window.URL.revokeObjectURL(abcUrl);
+
+            } else {
+                const data = await response.json();
+                alert("Compile error: " + (data.error || "Unknown error"));
+            }
+        } catch (err: any) {
+            alert("Failed to compile: " + err);
+        }
     };
 
     // Save the code
@@ -214,14 +427,11 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                 title: projectTitle,
                 content: code
             });
-            // Update the original values after saving
             setOriginalCode(code);
             setOriginalTitle(projectTitle);
             setIsSaved(true);
         } else {
-            // Create new project if somehow we don't have an ID
             const newProject = ProjectService.createProject(projectTitle, code);
-            // Update the original values after saving
             setOriginalCode(code);
             setOriginalTitle(projectTitle);
             setIsSaved(true);
@@ -258,7 +468,7 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
         mainContent: 'flex flex-1 overflow-hidden relative',
         editorPanel: `flex flex-col ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'} border-r ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`,
         editorHeader: 'p-2 border-b text-sm font-medium flex justify-between items-center',
-        lineNumbers: `py-2 text-xs ${theme === 'dark' ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-600'}`,
+        lineNumbers: `py-2 text-xs overflow-hidden ${theme === 'dark' ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-600'}`,
         codeEditor: `flex-1 p-2 text-sm font-mono outline-none resize-none ${theme === 'dark' ? 'bg-gray-900 text-gray-300' : 'bg-white'}`,
         problemsPanel: `p-2 ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'} text-sm max-h-28 overflow-auto border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`,
         previewPanel: `overflow-auto ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`,
@@ -280,7 +490,6 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                         <ArrowLeft size={18} />
                         <span className="ml-1">Back to Projects</span>
                     </button>
-
                     <div className="flex items-center space-x-2">
                         <Camera size={24} />
                         <input
@@ -299,10 +508,10 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                         {theme === 'light' ? 'Dark Mode' : 'Light Mode'}
                     </button>
                     <button
-                        onClick={handleRunCode}
+                        onClick={handleRun}
                         className={`px-2 py-1 rounded ${theme === 'dark' ? 'bg-blue-600' : 'bg-blue-500'} text-white`}
                     >
-                        Run
+                        Compile MIDI
                     </button>
                     <button
                         onClick={handleSaveCode}
@@ -350,7 +559,6 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                         <div className={styles.lineNumbers}>
                             {lineNumbers}
                         </div>
-
                         {/* Code editor */}
                         <textarea
                             value={code}
@@ -359,7 +567,6 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                             spellCheck={false}
                         />
                     </div>
-
                     {/* Problems panel */}
                     {parseResult.hasError && (
                         <div className={styles.problemsPanel}>
@@ -376,7 +583,6 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                         </div>
                     )}
                 </div>
-
                 {/* Resizer handle */}
                 <div
                     className="resizer-handle"
@@ -410,7 +616,6 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                         />
                     </div>
                 </div>
-
                 {/* Sheet music side */}
                 <div
                     className={styles.previewPanel}
@@ -420,18 +625,23 @@ const IWorkplace: React.FC<IWorkplaceProps> = ({ onNavigateToDashboard, projectI
                         <div className="border-b border-gray-300 pb-2 mb-4">
                             <h2 className="text-xl font-semibold">Sheet Music Preview</h2>
                         </div>
-
-                        <div className="bg-white p-4 rounded shadow">
-                            <MusicStaffRenderer
-                                code={code}
-                                hasError={parseResult.hasError}
-                                isLoading={isLoading}
-                            />
-                        </div>
+                        {/* Beautiful Sheet Music and Play Controls */}
+                        {abcNotation && (
+                            <div className="mb-8">
+                                <ABCJSPlayer abcText={abcNotation} />
+                                <div className="mt-4">
+                                    {/*<ABCJSRenderer abcText={abcNotation} />*/}
+                                </div>
+                            </div>
+                        )}
+                        {!abcNotation && (
+                            <div className="bg-white p-4 rounded shadow text-center text-gray-400">
+                                No compiled ABC/Sheet music to preview yet.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
-
             {/* Status bar */}
             <div className={styles.statusBar}>
                 <div>Music DSL Editor v1.0</div>

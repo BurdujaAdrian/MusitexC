@@ -1,0 +1,16 @@
+X: 1
+T: from C:\1b6ec961ec2d5bde3868d0591db9a8f5f6fcda9e77c39407aa6af66408fd8579_input.tmp
+%***Missing time signature meta command in MIDI file
+M: 4/4
+L: 1/8
+Q:1/4=90
+% Last note suggests Mixolydian mode tune
+K:C % 0 sharps
+V:1
+C2 E2 A2 B2| \
+A2 G2 F2 E2| \
+D2 B2 E2 D2| \
+F2 G2 G2 
+V:2
+g2 f2 e2 d2| \
+c2 

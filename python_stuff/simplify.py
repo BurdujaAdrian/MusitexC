@@ -1,5 +1,5 @@
 from new_parser import Parser
-from ast import *
+from ai_ast import *
 from lexer import *
 import copy
 
@@ -87,7 +87,7 @@ def resolve_macros(program):
                         try:
                             macro = program.macros[maps-1]
                         except:
-                            raise ValueError(f"Unknown idenfitier: {expr}")
+                            program.err_list.append(f"Unknown idenfitier: {expr}")
 
                         mov_body = mov_body[:e_id] + inline_macro_body(macro,program) + mov_body[e_id+1:]
                         was_modified = True
@@ -100,7 +100,7 @@ def resolve_macros(program):
                         try:
                             macro = program.macros[maps-1]
                         except:
-                            raise ValueError(f"Unknown macro: {expr}")
+                            ValueError(f"Unknown macro: {expr}")
 
                         new_macro = apply_macro(macro,expr.arguments,program)
                         mov_body = mov_body[:e_id] + inline_macro_body(new_macro,program) + mov_body[e_id+1:]
@@ -133,7 +133,8 @@ def apply_macro(macro,args,program):
     return new_macro
 
 def inline_macro_body(macro,program):
-
+    if (macro is None) or (len(macro.body) == 0):
+        return []
     macro_body = copy.copy(macro.body)
 
     for e_id,expr in enumerate(macro.body):
