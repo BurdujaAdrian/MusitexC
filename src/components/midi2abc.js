@@ -642,33 +642,25 @@ function splitChord(chord, endTimes) {
 
 function segmentToString(ns, ins, instrumentId, tempo) {
   if (ins.length == 0) return "";
+  
   const timeSignatures = cleanupTimeSignatures(ns.timeSignatures);
   let timeSignature = timeSignatures.shift();
   const beat = timeSignature.numerator / timeSignature.denominator;
   const unitLength = (beat < 0.75) ? 2 : 4;
   const unitTime = tempo.qpm * unitLength;
   const sectionLength = 240 / tempo.qpm * beat;
-  let abcString = setInstrumentHeader(
-    ins,
-    instrumentId,
-    unitLength,
-    timeSignature,
-  );
+  
+  let abcString = setInstrumentHeader(ins, instrumentId, unitLength, timeSignature);
+  
   section = 1;
   sectionEnd = tempo.time + section * sectionLength;
   timeSignature = timeSignatures.shift();
 
   const chords = getChord(ins);
+  
   chords.forEach((chord, i) => {
-    // TODO: irregular meter
-    // start point shifts with long notes
-    // if (timeSignature && chord[0].startTime >= timeSignature.time) {
-    //   abcString += `\\\nM:${timeSignature.numerator}/${timeSignature.denominator}\n`;
-    //   beat = timeSignature.numerator / timeSignature.denominator;
-    //   sectionLength = 240 / tempo.qpm * beat;
-    //   timeSignature = timeSignatures.shift();
-    // }
     const nextChord = chords[i + 1];
+    
     if (i == 0 && chord[0].startTime != tempo.time) {
       abcString += durationToRestStrings(
         tempo.time,
@@ -678,6 +670,7 @@ function segmentToString(ns, ins, instrumentId, tempo) {
         sectionLength,
       );
     }
+    
     if (round(sectionEnd, 1e13) < round(chord[0].endTime, 1e13)) {
       abcString += chordToTieString(
         chord,
@@ -689,6 +682,7 @@ function segmentToString(ns, ins, instrumentId, tempo) {
     } else {
       abcString += chordToString(chord, nextChord, unitTime);
     }
+    
     if (nextChord) {
       abcString += durationToRestStrings(
         chord[0].endTime,
@@ -698,20 +692,60 @@ function segmentToString(ns, ins, instrumentId, tempo) {
         sectionLength,
       );
     } else {
-      abcString += durationToRestStrings(
+      // Handle the final chord properly
+      const restString = durationToRestStrings(
         chord[0].endTime,
         tempo.timeTo,
         tempo,
         unitTime,
         sectionLength,
       );
+      abcString += restString;
+      
+      // Ensure we end with a double bar line
+      if (!abcString.endsWith("|")) {
+        abcString += "||";
+      } else if (abcString.endsWith("|") && !abcString.endsWith("||")) {
+        abcString += "|";
+      }
+      
       if (!abcString.endsWith("\n")) {
         abcString += "\n";
       }
     }
   });
-  abcString = abcString.replace(/\|(\s*)$/, '||$1');
+  
   return abcString;
+}
+
+// Alternative approach - add the final bar logic after all processing:
+function ensureProperEnding(abcString) {
+  // Remove trailing whitespace but preserve structure
+  const lines = abcString.split('\n');
+  let lastMusicLine = '';
+  let lastMusicIndex = -1;
+  
+  // Find the last line with musical content
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (lines[i].trim() && !lines[i].startsWith('%') && !lines[i].match(/^[A-Z]:/)) {
+      lastMusicLine = lines[i];
+      lastMusicIndex = i;
+      break;
+    }
+  }
+  
+  if (lastMusicIndex >= 0) {
+    // Check if the last music line ends properly
+    if (!lastMusicLine.endsWith('||') && !lastMusicLine.endsWith('|]')) {
+      if (lastMusicLine.endsWith('|')) {
+        lines[lastMusicIndex] = lastMusicLine + '|';
+      } else {
+        lines[lastMusicIndex] = lastMusicLine + '||';
+      }
+    }
+  }
+  
+  return lines.join('\n');
 }
 
 function setInstrumentHeader(ins, instrumentId, unitLength, timeSignature) {
